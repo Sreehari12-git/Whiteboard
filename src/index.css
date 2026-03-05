@@ -2,3 +2,85 @@ html, body, #root {
   height: 100%;
   margin: 0;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  background: #0b1020;
+}
+
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.app-shell__sidebar {
+  background: radial-gradient(1200px 500px at 30% 0%, #1b2350 0%, #0b1020 55%, #070a14 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__main {
+  background: radial-gradient(1200px 700px at 70% 10%, #17234a 0%, #0b1020 55%, #070a14 100%);
+  overflow: auto;
+  padding: 22px 22px 34px;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  backdrop-filter: blur(6px);
+}
+
+.btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-primary {
+  border-color: rgba(99, 102, 241, 0.55);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.78));
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 1), rgba(79, 70, 229, 0.9));
+}
+
+.input, .textarea, .select {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(3, 6, 18, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 9px 10px;
+  outline: none;
+  font-size: 13px;
+}
+
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  line-height: 1.35;
+}
+
+.muted {
+  color: rgba(199, 203, 224, 0.78);
+}

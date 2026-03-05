@@ -1,12 +1,26 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import AppShell from "./components/AppShell";
+import ApiTestingDashboard from "./pages/api-testing/ApiTestingDashboard";
+import ApiTestingWorkspace from "./pages/api-testing/ApiTestingWorkspace";
+import ApiTestingReport from "./pages/api-testing/ApiTestingReport";
+import E2ETesting from "./pages/E2ETesting";
 import Whiteboard from "./pages/Whiteboard";
+import WhiteboardsDashboard from "./pages/WhiteboardsDashboard";
 
 export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route element={<AppShell />}>
+          <Route path="/" element={<Navigate to="/api-testing" replace />} />
+          <Route path="/api-testing" element={<ApiTestingDashboard />} />
+          <Route path="/api-testing/:apiId" element={<ApiTestingWorkspace />} />
+          <Route path="/api-testing/:apiId/report" element={<ApiTestingReport />} />
+          <Route path="/e2e-testing" element={<E2ETesting />} />
+        </Route>
+
+        {/* Keep existing whiteboard feature reachable */}
+        <Route path="/whiteboards" element={<WhiteboardsDashboard />} />
         <Route path="/whiteboard/:id" element={<Whiteboard />} />
       </Routes>
     </Router>
