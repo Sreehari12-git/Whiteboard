@@ -427,47 +427,78 @@ export default function ApiTestingWorkspace() {
         </div>
 
         {/* Middle: API config */}
-        <div className="panel" style={{ padding: 12 }}>
-          <div style={{ fontWeight: 900, color: "#fff", fontSize: 13 }}>API</div>
-          <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-            Configure method, URL, and headers (saved when you click Save).
-          </div>
-
-          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 10 }}>
-              <div>
-                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-                  Method
-                </div>
-                <select className="select" value={api.method} onChange={(e) => updateApiField("method", e.target.value)}>
-                  {METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-                  URL
-                </div>
-                <input className="input" value={api.url} onChange={(e) => updateApiField("url", e.target.value)} placeholder="https://..." />
-              </div>
+        <div className="panel" style={{ padding: 12, display: "grid", gap: 12 }}>
+          <div>
+            <div style={{ fontWeight: 900, color: "#fff", fontSize: 13 }}>API Config</div>
+            <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+              Configure method, URL, and headers.
             </div>
 
-            <div>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-                Headers (JSON)
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 10 }}>
+                <div>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                    Method
+                  </div>
+                  <select className="select" value={api.method} onChange={(e) => updateApiField("method", e.target.value)}>
+                    {METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                    URL
+                  </div>
+                  <input className="input" value={api.url} onChange={(e) => updateApiField("url", e.target.value)} placeholder="https://..." />
+                </div>
               </div>
-              <textarea
-                className="textarea"
-                value={api.headersJson || "{}"}
-                onChange={(e) => updateApiField("headersJson", e.target.value)}
-                spellCheck={false}
-                style={{ minHeight: 160 }}
-              />
-              <div className="muted" style={{ marginTop: 6, fontSize: 12, lineHeight: 1.45 }}>
-                Tip: for auth you can add <span style={{ color: "#fff" }}>"Authorization": "Bearer ..."</span>
+
+              <div>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+                  Headers (JSON)
+                </div>
+                <textarea
+                  className="textarea"
+                  value={api.headersJson || "{}"}
+                  onChange={(e) => updateApiField("headersJson", e.target.value)}
+                  spellCheck={false}
+                  style={{ minHeight: 100 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12 }}>
+            <div style={{ fontWeight: 900, color: "#fff", fontSize: 13 }}>E2E Helper DTOs</div>
+            <div className="muted" style={{ marginTop: 4, fontSize: 12, marginBottom: 10 }}>
+              Define request and response structures to help with E2E mapping and validation.
+            </div>
+            
+            <div style={{ display: "grid", gap: 12 }}>
+              <div>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 6, textTransform: "uppercase", fontWeight: 800 }}>Request DTO</div>
+                <textarea
+                  className="textarea"
+                  style={{ minHeight: 120, fontSize: 11 }}
+                  placeholder='{ "k1": "string", "k2": 0 }'
+                  value={api.requestDto || ""}
+                  onChange={(e) => updateApiField("requestDto", e.target.value)}
+                  spellCheck={false}
+                />
+              </div>
+              <div>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 6, textTransform: "uppercase", fontWeight: 800 }}>Response DTO</div>
+                <textarea
+                  className="textarea"
+                  style={{ minHeight: 120, fontSize: 11 }}
+                  placeholder='{ "k3": "string", "k4": "string" }'
+                  value={api.responseDto || ""}
+                  onChange={(e) => updateApiField("responseDto", e.target.value)}
+                  spellCheck={false}
+                />
               </div>
             </div>
           </div>
