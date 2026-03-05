@@ -14,21 +14,20 @@ function formatDate(iso) {
 
 export default function ApiTestingDashboard() {
   const navigate = useNavigate();
-  const [apis, setApis] = React.useState(() => getApis());
+  const [apis, setApis] = React.useState([]);
 
   const [showModal, setShowModal] = React.useState(false);
   const [name, setName] = React.useState("");
   const [method, setMethod] = React.useState("POST");
   const [url, setUrl] = React.useState("");
 
-  const refresh = React.useCallback(() => setApis(getApis()), []);
+  const refresh = React.useCallback(async () => {
+    const loaded = await getApis();
+    setApis(loaded);
+  }, []);
 
   React.useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === "apiTesting.apis.v1") refresh();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    refresh();
   }, [refresh]);
 
   const openCreate = () => {
@@ -38,19 +37,19 @@ export default function ApiTestingDashboard() {
     setShowModal(true);
   };
 
-  const onCreate = () => {
-    const api = createApi({ name, method, url });
+  const onCreate = async () => {
+    const api = await createApi({ name, method, url });
     setShowModal(false);
-    refresh();
+    await refresh();
     navigate(`/api-testing/${api.id}`);
   };
 
-  const onDelete = (e, apiId) => {
+  const onDelete = async (e, apiId) => {
     e.stopPropagation();
     const ok = window.confirm("Delete this API?");
     if (!ok) return;
-    deleteApi(apiId);
-    refresh();
+    await deleteApi(apiId);
+    await refresh();
   };
 
   return (
@@ -191,4 +190,3 @@ export default function ApiTestingDashboard() {
     </div>
   );
 }
-

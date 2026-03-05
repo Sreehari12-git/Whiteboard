@@ -42,24 +42,32 @@ function buildUrlWithQuery(url, queryObj) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default function ApiTestingWorkspace() {
   const { apiId } = useParams();
   const navigate = useNavigate();
 
-  const [api, setApi] = React.useState(() => (apiId ? getApiById(apiId) : null));
+  const [api, setApi] = React.useState(null);
   const [selectedPayloadId, setSelectedPayloadId] = React.useState(null);
   const [toast, setToast] = React.useState("");
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [isRunningAll, setIsRunningAll] = React.useState(false);
+  const [runProgress, setRunProgress] = React.useState({ current: 0, total: 0 });
 
   React.useEffect(() => {
-    if (!apiId) return;
-    const loaded = getApiById(apiId);
-    setApi(loaded);
-    setSelectedPayloadId(loaded?.payloads?.[0]?.id ?? null);
+    async function load() {
+      if (!apiId) return;
+      const loaded = await getApiById(apiId);
+      setApi(loaded);
+      setSelectedPayloadId(loaded?.payloads?.[0]?.id ?? null);
+    }
+    load();
   }, [apiId]);
 
   React.useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(""), 1400);
+    const t = setTimeout(() => setToast(""), 2000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -69,8 +77,8 @@ export default function ApiTestingWorkspace() {
   }, [api, selectedPayloadId]);
 
   const persist = React.useCallback(
-    (next) => {
-      const saved = upsertApi(next);
+    async (next) => {
+      const saved = await upsertApi(next);
       setApi(saved);
       return saved;
     },
@@ -82,28 +90,25 @@ export default function ApiTestingWorkspace() {
     setApi({ ...api, [field]: value });
   };
 
-  const saveApi = () => {
+  const saveApi = async () => {
     if (!api) return;
-    persist(api);
+    await persist(api);
     setToast("Saved");
   };
 
-  const addPayload = () => {
+  const addPayload = async () => {
     if (!api) return;
-    const now = new Date().toISOString();
     const payload = {
       id: uuidv4(),
       name: `Payload ${api.payloads.length + 1}`,
       bodyJson: "{\n  \n}",
-      createdAt: now,
-      updatedAt: now,
     };
     const next = { ...api, payloads: [...api.payloads, payload] };
-    const saved = persist(next);
+    const saved = await persist(next);
     setSelectedPayloadId(saved.payloads[saved.payloads.length - 1]?.id ?? null);
   };
 
-  const deletePayload = (payloadId) => {
+  const deletePayload = async (payloadId) => {
     if (!api) return;
     const ok = window.confirm("Delete this payload?");
     if (!ok) return;
@@ -111,34 +116,34 @@ export default function ApiTestingWorkspace() {
     const nextResults = { ...(api.lastResultsByPayloadId || {}) };
     delete nextResults[payloadId];
     const next = { ...api, payloads: nextPayloads, lastResultsByPayloadId: nextResults };
-    const saved = persist(next);
+    const saved = await persist(next);
     setSelectedPayloadId(saved.payloads[0]?.id ?? null);
   };
 
   const updatePayload = (payloadId, patch) => {
     if (!api) return;
     const nextPayloads = api.payloads.map((p) =>
-      p.id === payloadId ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p
+      p.id === payloadId ? { ...p, ...patch } : p
     );
     setApi({ ...api, payloads: nextPayloads });
   };
 
-  const runPayload = async (payload) => {
+  const runPayload = async (payload, silent = false) => {
     if (!api) return;
     if (!api.url) {
-      window.alert("Please set the API URL first.");
+      if (!silent) window.alert("Please set the API URL first.");
       return;
     }
 
     const headersParsed = safeJsonParse(api.headersJson || "{}");
     if (!headersParsed.ok) {
-      window.alert(`Headers JSON is invalid: ${headersParsed.error}`);
+      if (!silent) window.alert(`Headers JSON is invalid: ${headersParsed.error}`);
       return;
     }
 
     const bodyParsed = safeJsonParse(payload.bodyJson || "{}");
     if (!bodyParsed.ok) {
-      window.alert(`Payload JSON is invalid: ${bodyParsed.error}`);
+      if (!silent) window.alert(`Payload JSON is invalid: ${bodyParsed.error}`);
       return;
     }
 
@@ -193,37 +198,84 @@ export default function ApiTestingWorkspace() {
       };
     }
 
+    // We need to get the latest API state because multiple runs might be happening
+    const currentApi = await getApiById(api.id);
     const next = {
-      ...api,
+      ...currentApi,
       lastRunAt: new Date().toISOString(),
       lastResultsByPayloadId: {
-        ...(api.lastResultsByPayloadId || {}),
+        ...(currentApi.lastResultsByPayloadId || {}),
         [payload.id]: result,
       },
     };
-    persist(next);
+    await persist(next);
+    return result;
   };
 
-  const runAll = async () => {
-    if (!api) return;
-    for (const p of api.payloads) {
-      // eslint-disable-next-line no-await-in-loop
-      await runPayload(p);
+  const runAllWithDelay = async () => {
+    if (!api || isRunningAll) return;
+    setIsRunningAll(true);
+    setRunProgress({ current: 0, total: api.payloads.length });
+
+    for (let i = 0; i < api.payloads.length; i++) {
+      setRunProgress({ current: i + 1, total: api.payloads.length });
+      await runPayload(api.payloads[i], true);
+      if (i < api.payloads.length - 1) {
+        await sleep(500); // 500ms delay between requests
+      }
+    }
+
+    setIsRunningAll(false);
+    setToast("Run all completed");
+  };
+
+  const generateExamples = async () => {
+    if (!api || !api.payloadDto || isGenerating) return;
+    
+    const dtoParsed = safeJsonParse(api.payloadDto);
+    if (!dtoParsed.ok) {
+      window.alert(`Payload DTO JSON is invalid: ${dtoParsed.error}`);
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/examples", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payloadDto: dtoParsed.value }),
+      });
+
+      if (!res.ok) throw new Error(`Generator API returned ${res.status}`);
+      
+      const data = await res.json();
+      if (!data.examples || !Array.isArray(data.examples)) {
+        throw new Error("Invalid response from generator API");
+      }
+
+      const newPayloads = data.examples.map((ex, idx) => ({
+        id: uuidv4(),
+        name: `Generated ${idx + 1}`,
+        bodyJson: JSON.stringify(ex, null, 2),
+      }));
+
+      const next = {
+        ...api,
+        payloads: [...api.payloads, ...newPayloads],
+      };
+      await persist(next);
+      setToast(`Generated ${newPayloads.length} examples`);
+    } catch (e) {
+      window.alert(`Generation failed: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
   if (!api) {
     return (
       <div className="panel" style={{ padding: 18 }}>
-        <div style={{ fontWeight: 800, color: "#fff" }}>API not found</div>
-        <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-          It may have been deleted. Go back to the API list.
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <button className="btn" onClick={() => navigate("/api-testing")}>
-            ← Back
-          </button>
-        </div>
+        <div style={{ fontWeight: 800, color: "#fff" }}>Loading API...</div>
       </div>
     );
   }
@@ -244,7 +296,7 @@ export default function ApiTestingWorkspace() {
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {toast ? <div className="muted" style={{ fontSize: 12 }}>{toast}</div> : null}
+          {toast ? <div style={{ color: "#10b981", fontSize: 12, fontWeight: 800 }}>{toast}</div> : null}
           <button className="btn" onClick={() => navigate("/api-testing")}>
             Back
           </button>
@@ -257,66 +309,92 @@ export default function ApiTestingWorkspace() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr 420px", gap: 12, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr 420px", gap: 12, alignItems: "start" }}>
         {/* Left: payload list + editor */}
-        <div className="panel" style={{ padding: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-            <div style={{ fontWeight: 900, color: "#fff", fontSize: 13 }}>Payloads</div>
-            <button className="btn" onClick={addPayload}>
-              + Add
+        <div className="panel" style={{ padding: 12, display: "grid", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div style={{ fontWeight: 900, color: "#fff", fontSize: 13 }}>Payloads</div>
+              <button className="btn" onClick={addPayload}>
+                + Add
+              </button>
+            </div>
+
+            <div style={{ marginTop: 10, display: "grid", gap: 8, maxHeight: 300, overflow: "auto" }}>
+              {api.payloads.map((p) => {
+                const r = api.lastResultsByPayloadId?.[p.id];
+                const active = p.id === (selectedPayload?.id ?? null);
+                const badgeBg = r ? (r.ok ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)") : "rgba(255,255,255,0.08)";
+                const badgeColor = r ? (r.ok ? "#10b981" : "#ef4444") : "rgba(255,255,255,0.78)";
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => setSelectedPayloadId(p.id)}
+                    style={{
+                      padding: "9px 10px",
+                      borderRadius: 12,
+                      border: active ? "1px solid rgba(99,102,241,0.55)" : "1px solid rgba(255,255,255,0.10)",
+                      background: active ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.04)",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ color: "#fff", fontWeight: 750, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {p.name}
+                      </div>
+                      {r ? (
+                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                          {r.status ? `HTTP ${r.status}` : "Error"} · {formatDuration(r.durationMs)}
+                        </div>
+                      ) : (
+                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Not run</div>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ padding: "4px 8px", borderRadius: 999, background: badgeBg, color: badgeColor, fontWeight: 800, fontSize: 11 }}>
+                        {r ? (r.ok ? "PASS" : "FAIL") : "—"}
+                      </div>
+                      <button className="btn" onClick={(e) => { e.stopPropagation(); deletePayload(p.id); }}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Generator Section */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12 }}>
+            <div style={{ fontWeight: 900, color: "#fff", fontSize: 13 }}>Example Generator</div>
+            <div className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+              Put your Payload DTO here to generate test examples.
+            </div>
+            <textarea
+              className="textarea"
+              style={{ minHeight: 100, fontSize: 11 }}
+              placeholder='{ "userId": "uuid", "age": 30 }'
+              value={api.payloadDto || ""}
+              onChange={(e) => updateApiField("payloadDto", e.target.value)}
+              spellCheck={false}
+            />
+            <button 
+              className="btn btn-primary" 
+              style={{ marginTop: 10, width: "100%" }}
+              onClick={generateExamples}
+              disabled={isGenerating || !api.payloadDto}
+            >
+              {isGenerating ? "Generating..." : "Generate Examples"}
             </button>
           </div>
 
-          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-            {api.payloads.map((p) => {
-              const r = api.lastResultsByPayloadId?.[p.id];
-              const active = p.id === (selectedPayload?.id ?? null);
-              const badgeBg = r ? (r.ok ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)") : "rgba(255,255,255,0.08)";
-              const badgeColor = r ? (r.ok ? "#10b981" : "#ef4444") : "rgba(255,255,255,0.78)";
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => setSelectedPayloadId(p.id)}
-                  style={{
-                    padding: "9px 10px",
-                    borderRadius: 12,
-                    border: active ? "1px solid rgba(99,102,241,0.55)" : "1px solid rgba(255,255,255,0.10)",
-                    background: active ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.04)",
-                    cursor: "pointer",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ color: "#fff", fontWeight: 750, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {p.name}
-                    </div>
-                    {r ? (
-                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                        {r.status ? `HTTP ${r.status}` : "Error"} · {formatDuration(r.durationMs)}
-                      </div>
-                    ) : (
-                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Not run</div>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <div style={{ padding: "4px 8px", borderRadius: 999, background: badgeBg, color: badgeColor, fontWeight: 800, fontSize: 11 }}>
-                      {r ? (r.ok ? "PASS" : "FAIL") : "—"}
-                    </div>
-                    <button className="btn" onClick={(e) => { e.stopPropagation(); deletePayload(p.id); }}>
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           {selectedPayload ? (
-            <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12 }}>
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12 }}>
               <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
                 Payload name
               </div>
@@ -336,12 +414,12 @@ export default function ApiTestingWorkspace() {
                 spellCheck={false}
               />
 
-              <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
                 <button className="btn btn-primary" onClick={() => runPayload(selectedPayload)}>
                   Run payload
                 </button>
-                <button className="btn" onClick={runAll}>
-                  Run all
+                <button className="btn" onClick={runAllWithDelay} disabled={isRunningAll}>
+                  {isRunningAll ? `Running (${runProgress.current}/${runProgress.total})...` : "Run all with delay"}
                 </button>
               </div>
             </div>
@@ -462,4 +540,3 @@ export default function ApiTestingWorkspace() {
     </div>
   );
 }
-
