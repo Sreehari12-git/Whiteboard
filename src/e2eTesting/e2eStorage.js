@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { flowDb } from "../services/db";
+import { flowDb } from "../services/db.js";
 
 export async function getFlows() {
   return flowDb.getAll();

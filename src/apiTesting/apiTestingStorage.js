@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { apiDb } from "../services/db";
+import { apiDb } from "../services/db.js";
 
 export async function getApis() {
   return apiDb.getAll();
